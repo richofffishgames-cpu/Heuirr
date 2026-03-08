@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react"
-import { Layout, LogOut, Plus, RefreshCw, LogIn, PlusCircle, CreditCard, Gift, Key, PlayCircle } from "lucide-react"
+import { Layout, LogOut, Plus, RefreshCw, LogIn, PlusCircle, CreditCard, Gift, Key, PlayCircle, AlertCircle } from "lucide-react"
 
-const API_URL = "http://localhost:3000/api"
+const API_URL = "/api"
 
 export default function App() {
   const [token, setToken] = useState(localStorage.getItem("token"))
@@ -9,34 +9,51 @@ export default function App() {
   const [view, setView] = useState(user?.role === "admin" ? "admin" : "platforms")
   const [platforms, setPlatforms] = useState([])
   const [selectedPlatform, setSelectedPlatform] = useState(null)
+  const [error, setError] = useState(null)
+  const [loading, setLoading] = useState(false)
 
   useEffect(() => {
-    if (token) fetchPlatforms()
-  }, [token])
+    if (token && user) fetchPlatforms()
+  }, [token, user])
 
   const fetchPlatforms = async () => {
-    const res = await fetch(`${API_URL}/${user.role}/platforms`, {
-      headers: { Authorization: `Bearer ${token}` }
-    })
-    const data = await res.json()
-    setPlatforms(data)
+    try {
+      const res = await fetch(`${API_URL}/${user.role}/platforms`, {
+        headers: { Authorization: `Bearer ${token}` }
+      })
+      if (!res.ok) throw new Error("Failed to fetch platforms")
+      const data = await res.json()
+      setPlatforms(data)
+    } catch (err) {
+      console.error(err)
+    }
   }
 
   const login = async (e) => {
     e.preventDefault()
+    setError(null)
+    setLoading(true)
     const form = e.target
-    const res = await fetch(`${API_URL}/auth/login`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ username: form.username.value, password: form.password.value })
-    })
-    const data = await res.json()
-    if (data.token) {
-      localStorage.setItem("token", data.token)
-      localStorage.setItem("user", JSON.stringify(data.user))
-      setToken(data.token)
-      setUser(data.user)
-      setView(data.user.role === "admin" ? "admin" : "platforms")
+    try {
+      const res = await fetch(`${API_URL}/auth/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username: form.username.value, password: form.password.value })
+      })
+      const data = await res.json()
+      if (data.token) {
+        localStorage.setItem("token", data.token)
+        localStorage.setItem("user", JSON.stringify(data.user))
+        setToken(data.token)
+        setUser(data.user)
+        setView(data.user.role === "admin" ? "admin" : "platforms")
+      } else {
+        setError(data.error || "Login failed")
+      }
+    } catch (err) {
+      setError("Server connection failed")
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -45,6 +62,7 @@ export default function App() {
     setToken(null)
     setUser(null)
     setView("login")
+    setPlatforms([])
   }
 
   const createAccount = async (platformId) => {
@@ -54,10 +72,13 @@ export default function App() {
     })
     if (res.ok) {
       fetchPlatforms()
-      // Update selected platform to show new account
-      const updated = await res.json()
-      setSelectedPlatform(prev => ({ ...prev, account: updated }))
+      const updatedAccount = await res.json()
+      setSelectedPlatform(prev => ({ ...prev, account: updatedAccount }))
     }
+  }
+
+  const handleAction = (action) => {
+    alert(`${action} feature coming soon!`)
   }
 
   if (!token) return (
@@ -65,16 +86,21 @@ export default function App() {
       <div className="glass-card p-8 w-full max-w-md rounded-2xl">
         <h1 className="text-3xl font-bold mb-6 text-center bg-gradient-to-r from-blue-400 to-emerald-400 bg-clip-text text-transparent">Vaultify</h1>
         <form onSubmit={login} className="space-y-4">
+          {error && (
+            <div className="bg-red-500/10 border border-red-500/50 text-red-500 p-3 rounded-lg flex items-center gap-2 text-sm">
+              <AlertCircle size={16} /> {error}
+            </div>
+          )}
           <div>
             <label className="block text-sm font-medium mb-1 text-slate-400">Username</label>
-            <input name="username" className="w-full bg-slate-900 border border-slate-800 rounded-lg p-3 outline-none focus:border-blue-500 transition-colors" defaultValue="admin" />
+            <input name="username" required className="w-full bg-slate-900 border border-slate-800 rounded-lg p-3 outline-none focus:border-blue-500 transition-colors" defaultValue="admin" />
           </div>
           <div>
             <label className="block text-sm font-medium mb-1 text-slate-400">Password</label>
-            <input name="password" type="password" className="w-full bg-slate-900 border border-slate-800 rounded-lg p-3 outline-none focus:border-blue-500 transition-colors" defaultValue="password" />
+            <input name="password" required type="password" className="w-full bg-slate-900 border border-slate-800 rounded-lg p-3 outline-none focus:border-blue-500 transition-colors" defaultValue="password" />
           </div>
-          <button className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg transition-colors flex items-center justify-center gap-2">
-            <LogIn size={20} /> Sign In
+          <button disabled={loading} className="w-full bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-bold py-3 rounded-lg transition-colors flex items-center justify-center gap-2">
+            {loading ? "Signing in..." : <><LogIn size={20} /> Sign In</>}
           </button>
         </form>
       </div>
@@ -82,34 +108,36 @@ export default function App() {
   )
 
   return (
-    <div className="min-h-screen bg-slate-950 flex">
+    <div className="min-h-screen bg-slate-950 flex flex-col md:flex-row">
       {/* Sidebar */}
-      <aside className="w-64 glass border-r border-slate-800 p-6 hidden md:flex flex-col gap-6">
-        <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-400 to-emerald-400 bg-clip-text text-transparent">Vaultify</h1>
-        <nav className="flex-1 space-y-2">
-          {user.role === "admin" ? (
-            <button onClick={() => setView("admin")} className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all ${view === "admin" ? "bg-blue-600 text-white" : "text-slate-400 hover:bg-slate-900"}`}>
-              <Layout size={20} /> Admin Panel
-            </button>
-          ) : (
-            <button onClick={() => setView("platforms")} className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all ${view === "platforms" ? "bg-blue-600 text-white" : "text-slate-400 hover:bg-slate-900"}`}>
-              <Layout size={20} /> Platforms
+      <aside className="w-full md:w-64 glass border-b md:border-b-0 md:border-r border-slate-800 p-6 flex flex-row md:flex-col gap-6 items-center md:items-stretch">
+        <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-400 to-emerald-400 bg-clip-text text-transparent mr-auto md:mr-0">Vaultify</h1>
+        <nav className="flex md:flex-col gap-2">
+          {user.role === "admin" && (
+            <button onClick={() => setView("admin")} className={`flex items-center gap-3 p-3 rounded-xl transition-all ${view === "admin" ? "bg-blue-600 text-white" : "text-slate-400 hover:bg-slate-900"}`}>
+              <Layout size={20} /> <span className="hidden md:inline">Admin Panel</span>
             </button>
           )}
+          <button onClick={() => setView("platforms")} className={`flex items-center gap-3 p-3 rounded-xl transition-all ${view === "platforms" ? "bg-blue-600 text-white" : "text-slate-400 hover:bg-slate-900"}`}>
+            <Layout size={20} /> <span className="hidden md:inline">Platforms</span>
+          </button>
         </nav>
-        <button onClick={logout} className="flex items-center gap-3 p-3 rounded-xl text-slate-400 hover:bg-red-950 hover:text-red-400 transition-all">
-          <LogOut size={20} /> Logout
+        <button onClick={logout} className="md:mt-auto flex items-center gap-3 p-3 rounded-xl text-slate-400 hover:bg-red-950 hover:text-red-400 transition-all">
+          <LogOut size={20} /> <span className="hidden md:inline">Sign Out</span>
         </button>
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 p-8 overflow-y-auto">
+      <main className="flex-1 p-4 md:p-8 overflow-y-auto">
         <div className="max-w-6xl mx-auto">
           {view === "platforms" && (
-            <div>
-              <h2 className="text-3xl font-bold mb-8">Platforms</h2>
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-6">
-                {platforms.slice(0, 16).map(p => (
+            <div className="space-y-8">
+              <div className="flex justify-between items-center">
+                <h2 className="text-3xl font-bold">Gaming Platforms</h2>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                {platforms.map(p => (
                   <div key={p.id} onClick={() => setSelectedPlatform(p)} className="glass-card p-4 rounded-2xl cursor-pointer hover:scale-[1.02] transition-transform group relative overflow-hidden">
                     <div className="aspect-square bg-slate-900 rounded-xl mb-4 overflow-hidden">
                       {p.imageUrl ? (
@@ -123,7 +151,7 @@ export default function App() {
                   </div>
                 ))}
                 {user.role === "admin" && (
-                   <div onClick={() => setView("add-platform")} className="glass border-2 border-dashed border-slate-800 p-4 rounded-2xl cursor-pointer hover:border-blue-500 transition-colors flex flex-col items-center justify-center gap-4 text-slate-500 hover:text-blue-500">
+                   <div onClick={() => setView("add-platform")} className="glass border-2 border-dashed border-slate-800 p-4 rounded-2xl cursor-pointer hover:border-blue-500 transition-colors flex flex-col items-center justify-center gap-4 text-slate-500 hover:text-blue-500 min-h-[200px]">
                     <PlusCircle size={48} />
                     <span className="font-bold">Add Platform</span>
                    </div>
@@ -141,8 +169,8 @@ export default function App() {
                 </button>
               </div>
 
-              <div className="glass-card rounded-2xl overflow-hidden">
-                <table className="w-full text-left">
+              <div className="glass-card rounded-2xl overflow-hidden overflow-x-auto">
+                <table className="w-full text-left min-w-[600px]">
                   <thead className="bg-slate-900/50">
                     <tr>
                       <th className="p-4 font-bold text-slate-400">Name</th>
@@ -151,12 +179,12 @@ export default function App() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-800">
-                    {platforms.slice(0, 16).map(p => (
+                    {platforms.map(p => (
                       <tr key={p.id} className="hover:bg-slate-900/30 transition-colors">
                         <td className="p-4 font-medium">{p.name}</td>
                         <td className="p-4 text-slate-400 text-sm truncate max-w-xs">{p.playUrl}</td>
                         <td className="p-4 text-right">
-                          <button className="text-slate-400 hover:text-white transition-colors">Edit</button>
+                          <button onClick={() => handleAction("Edit")} className="text-slate-400 hover:text-white transition-colors">Edit</button>
                         </td>
                       </tr>
                     ))}
@@ -167,7 +195,7 @@ export default function App() {
           )}
 
           {view === "add-platform" && (
-            <div className="max-w-xl">
+            <div className="max-w-xl mx-auto">
                <h2 className="text-3xl font-bold mb-8">Add New Platform</h2>
                <form className="glass-card p-6 rounded-2xl space-y-6" onSubmit={async (e) => {
                  e.preventDefault()
@@ -202,7 +230,7 @@ export default function App() {
                   </div>
                   <div className="flex gap-4">
                     <button type="submit" className="flex-1 bg-blue-600 hover:bg-blue-700 py-3 rounded-lg font-bold">Create Platform</button>
-                    <button type="button" onClick={() => setView("admin")} className="flex-1 bg-slate-800 hover:bg-slate-700 py-3 rounded-lg font-bold">Cancel</button>
+                    <button type="button" onClick={() => setView(user.role === "admin" ? "admin" : "platforms")} className="flex-1 bg-slate-800 hover:bg-slate-700 py-3 rounded-lg font-bold">Cancel</button>
                   </div>
                </form>
             </div>
@@ -221,7 +249,7 @@ export default function App() {
                    <div className="text-slate-800 font-bold text-8xl">{selectedPlatform.name[0]}</div>
                  )}
               </div>
-              <div className="p-8 flex-1 flex flex-col gap-6">
+              <div className="p-8 flex-1 flex flex-col gap-6 overflow-y-auto">
                  <div className="flex justify-between items-start">
                     <h2 className="text-3xl font-bold">{selectedPlatform.name}</h2>
                     <button onClick={() => setSelectedPlatform(null)} className="text-slate-400 hover:text-white transition-colors">✕</button>
@@ -252,16 +280,16 @@ export default function App() {
                       </div>
 
                       <div className="grid grid-cols-2 gap-4">
-                         <button className="flex items-center justify-center gap-2 bg-slate-900 hover:bg-slate-800 p-4 rounded-2xl font-bold transition-colors">
+                         <button onClick={() => handleAction("Deposit")} className="flex items-center justify-center gap-2 bg-slate-900 hover:bg-slate-800 p-4 rounded-2xl font-bold transition-colors">
                            <CreditCard size={18} /> Deposit
                          </button>
-                         <button className="flex items-center justify-center gap-2 bg-slate-900 hover:bg-slate-800 p-4 rounded-2xl font-bold transition-colors">
+                         <button onClick={() => handleAction("Redeem")} className="flex items-center justify-center gap-2 bg-slate-900 hover:bg-slate-800 p-4 rounded-2xl font-bold transition-colors">
                            <Gift size={18} /> Redeem
                          </button>
-                         <button className="flex items-center justify-center gap-2 bg-slate-900 hover:bg-slate-800 p-4 rounded-2xl font-bold transition-colors">
+                         <button onClick={() => handleAction("Reset PW")} className="flex items-center justify-center gap-2 bg-slate-900 hover:bg-slate-800 p-4 rounded-2xl font-bold transition-colors">
                            <RefreshCw size={18} /> Reset PW
                          </button>
-                         <a href={selectedPlatform.playUrl} target="_blank" className="flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 p-4 rounded-2xl font-bold transition-colors">
+                         <a href={selectedPlatform.playUrl} target="_blank" rel="noopener noreferrer" className="flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 p-4 rounded-2xl font-bold transition-colors">
                            <PlayCircle size={18} /> Play Now
                          </a>
                       </div>
