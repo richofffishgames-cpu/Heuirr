@@ -137,7 +137,7 @@ export default function App() {
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                {platforms.map(p => (
+                {platforms.slice(0, 16).map(p => (
                   <div key={p.id} onClick={() => setSelectedPlatform(p)} className="glass-card p-4 rounded-2xl cursor-pointer hover:scale-[1.02] transition-transform group relative overflow-hidden">
                     <div className="aspect-square bg-slate-900 rounded-xl mb-4 overflow-hidden">
                       {p.imageUrl ? (
@@ -179,7 +179,7 @@ export default function App() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-800">
-                    {platforms.map(p => (
+                    {platforms.slice(0, 16).map(p => (
                       <tr key={p.id} className="hover:bg-slate-900/30 transition-colors">
                         <td className="p-4 font-medium">{p.name}</td>
                         <td className="p-4 text-slate-400 text-sm truncate max-w-xs">{p.playUrl}</td>
